@@ -76,50 +76,8 @@ If you want to test the v2 version model (the v2 version model changes the featu
 ```
 
 # Inference with CLI
-## Manually
-```bash
-python infer-web.py --pycmd python --is_cli
+Simply call `infer.py` as follows:
 ```
-## Usage
-```bash
-Mangio-RVC-Fork v2 CLI App!
-
-Welcome to the CLI version of RVC. Please read the documentation on https://github.com/Mangio621/Mangio-RVC-Fork (README.MD) to understand how to use this app.
-
-You are currently in 'HOME':
-    go home            : Takes you back to home with a navigation list.
-    go infer           : Takes you to inference command execution.
-
-    go pre-process     : Takes you to training step.1) pre-process command execution.
-    go extract-feature : Takes you to training step.2) extract-feature command execution.
-    go train           : Takes you to training step.3) being or continue training command execution.
-    go train-feature   : Takes you to the train feature index command execution.
-
-    go extract-model   : Takes you to the extract small model command execution.
-
-HOME:
+python infer.py <model_path> <input_audio> <output_audio> <index_path> 1 0 harvest 160 3 0 1 0.78 0.33
 ```
-
-Typing 'go infer' for example will take you to the infer page where you can then enter in your arguments that you wish to use for that specific page. For example typing 'go infer' will take you here:
-
-```bash
-HOME: go infer
-You are currently in 'INFER':
-    arg 1) model name with .pth in ./weights: mi-test.pth
-    arg 2) source audio path: myFolder\MySource.wav
-    arg 3) output file name to be placed in './audio-outputs': MyTest.wav
-    arg 4) feature index file path: logs/mi-test/added_IVF3042_Flat_nprobe_1.index
-    arg 5) speaker id: 0
-    arg 6) transposition: 0
-    arg 7) f0 method: harvest (pm, harvest, crepe, crepe-tiny)
-    arg 8) crepe hop length: 160
-    arg 9) harvest median filter radius: 3 (0-7)
-    arg 10) post resample rate: 0
-    arg 11) mix volume envelope: 1
-    arg 12) feature index ratio: 0.78 (0-1)
-    arg 13) Voiceless Consonant Protection (Less Artifact): 0.33 (Smaller number = more protection. 0.50 means Dont Use.)
-
-Example: mi-test.pth saudio/Sidney.wav myTest.wav logs/mi-test/added_index.index 0 -2 harvest 160 3 0 1 0.95 0.33
-
-INFER: <INSERT ARGUMENTS HERE OR COPY AND PASTE THE EXAMPLE>
 ```
