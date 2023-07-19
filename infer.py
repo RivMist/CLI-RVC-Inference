@@ -1,4 +1,4 @@
-import sys
+import platform
 import os
 import argparse
 import traceback
@@ -260,9 +260,16 @@ def vc_single(
         print(info)
         return info, (None, None)
 
+def set_env_var_for_mac():
+    if platform.system() == 'Darwin':  # Darwin indicates it's a Mac
+        os.environ['PYTORCH_ENABLE_MPS_FALLBACK'] = '1'
+        print("Environment variable set: PYTORCH_ENABLE_MPS_FALLBACK=1")
+
+
 def main():
     args = parse_args()
     print("RVCv2: Starting the inference...")
+    set_env_var_for_mac()
     vc_data = get_vc(args.model_name, {}, {})
     print(vc_data)
     print("RVCv2: Performing inference...")
