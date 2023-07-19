@@ -289,9 +289,9 @@ def main():
         args.crepe_hop_length,        
     )
     if "Success." in conversion_data[0]:
-        print("RVCv2: Inference succeeded. Writing to %s/%s..." % ('RVCv2/', args.output_filename))
-        wavfile.write('%s/%s' % ('RVCv2/', args.output_filename), conversion_data[1][0], conversion_data[1][1])
-        print("RVCv2: Finished! Saved output to %s/%s" % ('', args.output_filename))
+        print("RVCv2: Inference succeeded. Writing to %s/%s..." % ('RVCv2/audio-outputs/', args.output_filename))
+        wavfile.write('%s/%s' % ('RVCv2/audio-outputs/', args.output_filename), conversion_data[1][0], conversion_data[1][1])
+        print("RVCv2: Finished! Saved output to %s/%s" % ('RVCv2/audio-outputs/', args.output_filename))
     else:
         print("RVCv2: Inference failed. Here's the traceback: ")
         print(conversion_data[0])
