@@ -16,59 +16,48 @@ def config_file_change_fp32():
 
 
 class Config:
+    # Okay this a lil hacky, clean up later
     def __init__(self):
         self.device = "cuda:0"
         self.is_half = True
         self.n_cpu = 0
         self.gpu_name = None
         self.gpu_mem = None
-        (
-            self.python_cmd,
-            self.listen_port,
-            self.iscolab,
-            self.noparallel,
-            self.noautoopen,
-            self.paperspace,
-            self.is_cli,
-        ) = self.arg_parse()
-        
+        self.python_cmd = "python"
+        self.listen_port = 7865
+        self.iscolab = False
+        self.noparallel = False
+        self.noautoopen = True
         self.x_pad, self.x_query, self.x_center, self.x_max = self.device_config()
 
     @staticmethod
     def arg_parse() -> tuple:
-        parser = argparse.ArgumentParser()
-        parser.add_argument("--port", type=int, default=7865, help="Listen port")
-        parser.add_argument(
-            "--pycmd", type=str, default="python", help="Python command"
-        )
-        parser.add_argument("--colab", action="store_true", help="Launch in colab")
-        parser.add_argument(
-            "--noparallel", action="store_true", help="Disable parallel processing"
-        )
-        parser.add_argument(
-            "--noautoopen",
-            action="store_true",
-            help="Do not open in browser automatically",
-        )
-        parser.add_argument( # Fork Feature. Paperspace integration for web UI
-            "--paperspace", action="store_true", help="Note that this argument just shares a gradio link for the web UI. Thus can be used on other non-local CLI systems."
-        )
-        parser.add_argument( # Fork Feature. Embed a CLI into the infer-web.py
-            "--is_cli", action="store_true", help="Use the CLI instead of setting up a gradio UI. This flag will launch an RVC text interface where you can execute functions from infer-web.py!"
-        )
-        cmd_opts = parser.parse_args()
+        pass
+        # parser = argparse.ArgumentParser()
+        # parser.add_argument("--port", type=int, default=7865, help="Listen port")
+        # parser.add_argument(
+        #     "--pycmd", type=str, default="python", help="Python command"
+        # )
+        # parser.add_argument("--colab", action="store_true", help="Launch in colab")
+        # parser.add_argument(
+        #     "--noparallel", action="store_true", help="Disable parallel processing"
+        # )
+        # parser.add_argument(
+        #     "--noautoopen",
+        #     action="store_true",
+        #     help="Do not open in browser automatically",
+        # )
+        # cmd_opts = parser.parse_args()
 
-        cmd_opts.port = cmd_opts.port if 0 <= cmd_opts.port <= 65535 else 7865
+        # cmd_opts.port = cmd_opts.port if 0 <= cmd_opts.port <= 65535 else 7865
 
-        return (
-            cmd_opts.pycmd,
-            cmd_opts.port,
-            cmd_opts.colab,
-            cmd_opts.noparallel,
-            cmd_opts.noautoopen,
-            cmd_opts.paperspace,
-            cmd_opts.is_cli,
-        )
+        # return (
+        #     cmd_opts.pycmd,
+        #     cmd_opts.port,
+        #     cmd_opts.colab,
+        #     cmd_opts.noparallel,
+        #     cmd_opts.noautoopen,
+        # )
 
     def device_config(self) -> tuple:
         if torch.cuda.is_available():
