@@ -1,9 +1,10 @@
-import platform
 import os
 import argparse
+import demucs.separate
 import traceback
 import torch
 import numpy as np
+from pydub import AudioSegment
 from my_utils import load_audio
 from infer_pack.models import (
     SynthesizerTrnMs256NSFsid,
@@ -19,23 +20,25 @@ import scipy.io.wavfile as wavfile
 config = Config()
 
 def parse_args():
-    parser = argparse.ArgumentParser(description='Voice Inference Script')
-    
-    parser.add_argument('model_name', type=str, help='Model name with .pth in ./weights, e.g., mi-test.pth.')
-    parser.add_argument('source_audio_path', type=str, help='Source audio path, e.g., myFolder/MySource.wav.')
-    parser.add_argument('output_filename', type=str, help="Output file name to be placed in './audio-outputs', e.g., MyTest.wav.")
-    parser.add_argument('feature_index_filepath', type=str, help="Feature index file path, e.g., logs/mi-test/added_IVF3042_Flat_nprobe_1.index.")
-    parser.add_argument('speaker_id', type=int, help='Speaker ID, e.g., 0.')
-    parser.add_argument('transposition', type=int, help='Transposition, e.g., 0.')
-    parser.add_argument('f0_method', type=str, help="F0 method, e.g., 'harvest' (pm, harvest, crepe, crepe-tiny, hybrid[x,x,x,x], mangio-crepe, mangio-crepe-tiny).")
-    parser.add_argument('crepe_hop_length', type=int, help='Crepe hop length, e.g., 160.')
-    parser.add_argument('harvest_median_filter_radius', type=int, help='Harvest median filter radius (0-7), e.g., 3.')
-    parser.add_argument('post_resample_rate', type=int, help='Post resample rate, e.g., 0.')
-    parser.add_argument('mix_volume_envelope', type=int, help='Mix volume envelope, e.g., 1.')
-    parser.add_argument('feature_index_ratio', type=float, help='Feature index ratio (0-1), e.g., 0.78.')
-    parser.add_argument('voiceless_consonant_protection', type=float, help='Voiceless Consonant Protection (Less Artifact). Smaller number = more protection. 0.50 means Do not Use. E.g., 0.33.')
+    parser = argparse.ArgumentParser()
 
-    return parser.parse_args()
+    parser.add_argument('model_name', type=str, help='Model name. Will recursively search models/<name>/ for .pth and .index files')
+    parser.add_argument('source_audio_path', type=str, help='Source audio path, e.g., myFolder/MySource.wav.')
+
+    parser.add_argument('--output_filename', type=str, default='MyTest.wav', help="Output file name to be placed in './audio-outputs', e.g., MyTest.wav.")
+    parser.add_argument('--feature_index_filepath', type=str, default='logs/mi-test/added_IVF3042_Flat_nprobe_1.index', help="Feature index file path, e.g., logs/mi-test/added_IVF3042_Flat_nprobe_1.index.")
+    parser.add_argument('--speaker_id', type=int, default=0, help='Speaker ID, e.g., 0.')
+    parser.add_argument('--transposition', type=int, default=0, help='Transposition, e.g., 0.')
+    parser.add_argument('--f0_method', type=str, default='harvest', help="F0 method, e.g., 'harvest' (pm, harvest, crepe, crepe-tiny, hybrid[x,x,x,x], mangio-crepe, mangio-crepe-tiny).")
+    parser.add_argument('--crepe_hop_length', type=int, default=160, help='Crepe hop length, e.g., 160.')
+    parser.add_argument('--harvest_median_filter_radius', type=int, default=3, help='Harvest median filter radius (0-7), e.g., 3.')
+    parser.add_argument('--post_resample_rate', type=int, default=0, help='Post resample rate, e.g., 0.')
+    parser.add_argument('--mix_volume_envelope', type=int, default=1, help='Mix volume envelope, e.g., 1.')
+    parser.add_argument('--feature_index_ratio', type=float, default=0.78, help='Feature index ratio (0-1), e.g., 0.78.')
+    parser.add_argument('--voiceless_consonant_protection', type=float, default=0.33, help='Voiceless Consonant Protection (Less Artifact). Smaller number = more protection. 0.50 means Do not Use. E.g., 0.33.')
+
+    args = parser.parse_args()
+    return args
 
 hubert_model = None
 
@@ -238,9 +241,9 @@ def vc_single(
             tgt_sr,
             resample_sr,
             rms_mix_rate,
-            version
-            # protect,
-            # crepe_hop_length
+            version,
+            protect,
+            crepe_hop_length,
         )
         if tgt_sr != resample_sr >= 16000:
             tgt_sr = resample_sr
@@ -259,28 +262,71 @@ def vc_single(
         info = traceback.format_exc()
         print(info)
         return info, (None, None)
+    
+def find_pth_and_index_files(directory):
+    pth_file = None
+    index_file = None
 
-def set_env_var_for_mac():
-    if platform.system() == 'Darwin':  # Darwin indicates it's a Mac
-        os.environ['PYTORCH_ENABLE_MPS_FALLBACK'] = '1'
-        print("Environment variable set: PYTORCH_ENABLE_MPS_FALLBACK=1")
+    for root, _, files in os.walk(directory):
+        for filename in files:
+            if filename.endswith(".pth") and pth_file is None:
+                pth_file = os.path.join(root, filename)
+            if filename.endswith(".index") and index_file is None:
+                index_file = os.path.join(root, filename)
+            if pth_file is not None and index_file is not None:
+                return pth_file, index_file
+
+    return pth_file, index_file
+
+def separate_track(source_audio_path):
+    track_filename = os.path.basename(source_audio_path)
+    track_name = os.path.splitext(track_filename)[0]
+    # Check if splits already exist to avoid reprocessing
+    if os.path.exists(f"separated/htdemucs/{track_name}/vocals.wav") and os.path.exists(f"separated/htdemucs/{track_name}/no_vocals.wav"):
+        print("Found pre-separated track, skipping separation.")
+        return track_name
+    # Separate the track with demucs
+    # Written to /seperated/htdemucs/{track_name}/vocals.wav
+    demucs.separate.main(["--two-stems", "vocals", source_audio_path])
+    return track_name
+
+def join_track(track_name, model_name):
+    # Load the audio files
+    vocal = AudioSegment.from_wav(f"RVCv2/audio-outputs/{track_name}_{model_name}_vocals.wav")
+    instrumental = AudioSegment.from_wav(f"separated/htdemucs/{track_name}/no_vocals.wav")
+
+    # Combine the audio files
+    combined = vocal.overlay(instrumental)
+
+    return combined
 
 
 def main():
     args = parse_args()
+    print("Searching for model...")
+    pth_file, index_file = find_pth_and_index_files(f"models/{args.model_name}/")
+    if pth_file is None:
+        print("No model file found.")
+        return
+    print("Found model file: %s" % pth_file)
+    print("Found index file: %s" % index_file)
+    print("---------------------------------")
+    print("Demucs: Starting track separation...")
+    track_name = separate_track(args.source_audio_path)
+    print("Demucs: Track separation complete.")
+    print("---------------------------------")
     print("RVCv2: Starting the inference...")
-    set_env_var_for_mac()
-    vc_data = get_vc(args.model_name, {}, {})
+    vc_data = get_vc(pth_file, {}, {})
     print(vc_data)
     print("RVCv2: Performing inference...")
     conversion_data = vc_single(
         args.speaker_id,
-        args.source_audio_path,
+        f"separated/htdemucs/{track_name}/vocals.wav",
         args.transposition,
         None,
         args.f0_method,
-        args.feature_index_filepath,
-        args.feature_index_filepath,
+        index_file if index_file is not None else "",
+        index_file if index_file is not None else "",
         args.feature_index_ratio,
         args.harvest_median_filter_radius,
         args.post_resample_rate,
@@ -289,9 +335,20 @@ def main():
         args.crepe_hop_length,        
     )
     if "Success." in conversion_data[0]:
-        print("RVCv2: Inference succeeded. Writing to %s/%s..." % ('RVCv2/audio-outputs/', args.output_filename))
-        wavfile.write('%s/%s' % ('RVCv2/audio-outputs/', args.output_filename), conversion_data[1][0], conversion_data[1][1])
-        print("RVCv2: Finished! Saved output to %s/%s" % ('RVCv2/audio-outputs/', args.output_filename))
+        print("RVCv2: Inference succeeded. Writing to %s/%s..." % ('RVCv2/audio-outputs', f"{track_name}_{args.model_name}_vocals.wav"))
+        wavfile.write('%s/%s' % ('RVCv2/audio-outputs', f"{track_name}_{args.model_name}_vocals.wav"), conversion_data[1][0], conversion_data[1][1])
+        print("RVCv2: Finished! Saved output to %s/%s" % ('RVCv2/audio-outputs', f"{track_name}_{args.model_name}_vocals.wav"))
+        print("---------------------------------")
+        print("Rejoing the track...")
+        joined_track = join_track(track_name, args.model_name)
+        print("Track rejoined.")
+        print("Writing completed file...")
+        joined_track.export(f"RVCv2/audio-outputs/{track_name}_{args.model_name}.wav", format='wav')
+        print("Track successfully written to: " + f"RVCv2/audio-outputs/{track_name}_{args.model_name}.wav")
+        print("Cleaning up vocal track...")
+        os.remove(f"RVCv2/audio-outputs/{track_name}_{args.model_name}_vocals.wav")
+        print("---------------------------------")
+        print("Inference complete.")
     else:
         print("RVCv2: Inference failed. Here's the traceback: ")
         print(conversion_data[0])
