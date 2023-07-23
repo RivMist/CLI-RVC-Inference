@@ -1,21 +1,23 @@
-import os
 import argparse
-import demucs.separate
+import os
 import traceback
-import torch
+
+import demucs.separate
 import numpy as np
+import scipy.io.wavfile as wavfile
+import torch
+from fairseq import checkpoint_utils
 from pydub import AudioSegment
-from my_utils import load_audio
+
+from config import Config
 from infer_pack.models import (
     SynthesizerTrnMs256NSFsid,
     SynthesizerTrnMs256NSFsid_nono,
     SynthesizerTrnMs768NSFsid,
     SynthesizerTrnMs768NSFsid_nono,
 )
-from fairseq import checkpoint_utils
-from config import Config
+from my_utils import load_audio
 from vc_infer_pipeline import VC
-import scipy.io.wavfile as wavfile
 
 config = Config()
 current_dir = os.path.dirname(os.path.abspath(__file__))

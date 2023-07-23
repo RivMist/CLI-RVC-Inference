@@ -1,12 +1,11 @@
+import json  # Mangio fork using json for preset saving
 import os
 import shutil
 import sys
 
-import json # Mangio fork using json for preset saving
-
 now_dir = os.getcwd()
 sys.path.append(now_dir)
-import traceback, pdb
+import traceback
 import warnings
 
 import numpy as np

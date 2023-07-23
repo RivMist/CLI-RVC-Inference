@@ -1,25 +1,23 @@
-import io
+import logging
 import os
-import torch
+import traceback
 
 # os.system("wget -P cvec/ https://huggingface.co/lj1995/VoiceConversionWebUI/resolve/main/hubert_base.pt")
 import gradio as gr
 import librosa
 import numpy as np
-import soundfile
-import logging
+import torch
 from fairseq import checkpoint_utils
-from my_utils import load_audio
-from vc_infer_pipeline import VC
-import traceback
+
 from config import Config
+from i18n import I18nAuto
 from infer_pack.models import (
     SynthesizerTrnMs256NSFsid,
     SynthesizerTrnMs256NSFsid_nono,
     SynthesizerTrnMs768NSFsid,
     SynthesizerTrnMs768NSFsid_nono,
 )
-from i18n import I18nAuto
+from vc_infer_pipeline import VC
 
 logging.getLogger("numba").setLevel(logging.WARNING)
 logging.getLogger("markdown_it").setLevel(logging.WARNING)

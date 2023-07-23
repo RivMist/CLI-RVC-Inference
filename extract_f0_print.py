@@ -1,10 +1,12 @@
-import os, traceback, sys, parselmouth
+import os
+import parselmouth
+import sys
+import traceback
 
 now_dir = os.getcwd()
 sys.path.append(now_dir)
 from my_utils import load_audio
 import pyworld
-from scipy.io import wavfile
 import numpy as np, logging
 import torchcrepe # Fork Feature. Crepe algo for training and preprocess
 import torch
