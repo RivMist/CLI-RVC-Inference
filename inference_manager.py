@@ -15,33 +15,43 @@ from .infer_pack.models import (
 from fairseq import checkpoint_utils
 from .config import Config
 from .vc_infer_pipeline import VC
-import scipy.io.wavfile as wavfile
 import threading
 
+current_dir = os.path.dirname(os.path.abspath(__file__))
 config = Config()
+
 
 def parse_args():
     parser = argparse.ArgumentParser()
 
-    parser.add_argument('model_name', type=str, help='Model name. Will recursively search models/<name>/ for .pth and .index files')
+    parser.add_argument('model_name', type=str,
+                        help='Model name. Will recursively search models/<name>/ for .pth and .index files')
     parser.add_argument('source_audio_path', type=str, help='Source audio path, e.g., myFolder/MySource.wav.')
 
-    parser.add_argument('--output_filename', type=str, default='MyTest.wav', help="Output file name to be placed in './audio-outputs', e.g., MyTest.wav.")
-    parser.add_argument('--feature_index_filepath', type=str, default='logs/mi-test/added_IVF3042_Flat_nprobe_1.index', help="Feature index file path, e.g., logs/mi-test/added_IVF3042_Flat_nprobe_1.index.")
+    parser.add_argument('--output_filename', type=str, default='MyTest.wav',
+                        help="Output file name to be placed in './audio-outputs', e.g., MyTest.wav.")
+    parser.add_argument('--feature_index_filepath', type=str, default='logs/mi-test/added_IVF3042_Flat_nprobe_1.index',
+                        help="Feature index file path, e.g., logs/mi-test/added_IVF3042_Flat_nprobe_1.index.")
     parser.add_argument('--speaker_id', type=int, default=0, help='Speaker ID, e.g., 0.')
     parser.add_argument('--transposition', type=int, default=0, help='Transposition, e.g., 0.')
-    parser.add_argument('--f0_method', type=str, default='harvest', help="F0 method, e.g., 'harvest' (pm, harvest, crepe, crepe-tiny, hybrid[x,x,x,x], mangio-crepe, mangio-crepe-tiny).")
+    parser.add_argument('--f0_method', type=str, default='harvest',
+                        help="F0 method, e.g., 'harvest' (pm, harvest, crepe, crepe-tiny, hybrid[x,x,x,x], mangio-crepe, mangio-crepe-tiny).")
     parser.add_argument('--crepe_hop_length', type=int, default=160, help='Crepe hop length, e.g., 160.')
-    parser.add_argument('--harvest_median_filter_radius', type=int, default=3, help='Harvest median filter radius (0-7), e.g., 3.')
+    parser.add_argument('--harvest_median_filter_radius', type=int, default=3,
+                        help='Harvest median filter radius (0-7), e.g., 3.')
     parser.add_argument('--post_resample_rate', type=int, default=0, help='Post resample rate, e.g., 0.')
     parser.add_argument('--mix_volume_envelope', type=int, default=1, help='Mix volume envelope, e.g., 1.')
-    parser.add_argument('--feature_index_ratio', type=float, default=0.78, help='Feature index ratio (0-1), e.g., 0.78.')
-    parser.add_argument('--voiceless_consonant_protection', type=float, default=0.33, help='Voiceless Consonant Protection (Less Artifact). Smaller number = more protection. 0.50 means Do not Use. E.g., 0.33.')
+    parser.add_argument('--feature_index_ratio', type=float, default=0.78,
+                        help='Feature index ratio (0-1), e.g., 0.78.')
+    parser.add_argument('--voiceless_consonant_protection', type=float, default=0.33,
+                        help='Voiceless Consonant Protection (Less Artifact). Smaller number = more protection. 0.50 means Do not Use. E.g., 0.33.')
 
     args = parser.parse_args()
     return args
 
+
 hubert_model = None
+
 
 def load_hubert(weights_path: str):
     global hubert_model
@@ -167,23 +177,22 @@ def get_vc(sid, to_return_protect0, to_return_protect1):
     )
 
 
-
 def vc_single(
-    sid,
-    input_audio_path,
-    f0_up_key,
-    f0_file,
-    f0_method,
-    file_index,
-    file_index2,
-    index_rate,
-    filter_radius,
-    resample_sr,
-    rms_mix_rate,
-    protect,
-    crepe_hop_length,
-    weights_path,
-): 
+        sid,
+        input_audio_path,
+        f0_up_key,
+        f0_file,
+        f0_method,
+        file_index,
+        file_index2,
+        index_rate,
+        filter_radius,
+        resample_sr,
+        rms_mix_rate,
+        protect,
+        crepe_hop_length,
+        weights_path,
+):
     global tgt_sr, net_g, vc, hubert_model, version
     if input_audio_path is None:
         return "You need to upload an audio", None
@@ -208,7 +217,7 @@ def vc_single(
             )
             if file_index != ""
             else file_index2
-        ) 
+        )
         audio_opt = vc.pipeline(
             hubert_model,
             net_g,
@@ -246,7 +255,8 @@ def vc_single(
         info = traceback.format_exc()
         print(info)
         return info, (None, None)
-    
+
+
 def find_pth_and_index_files(directory):
     pth_file = None
     index_file = None
@@ -262,11 +272,13 @@ def find_pth_and_index_files(directory):
 
     return pth_file, index_file
 
+
 def separate_track(source_audio_path):
     track_filename = os.path.basename(source_audio_path)
     track_name = os.path.splitext(track_filename)[0]
     # Check if splits already exist to avoid reprocessing
-    if os.path.exists(f"separated/htdemucs/{track_name}/vocals.wav") and os.path.exists(f"separated/htdemucs/{track_name}/no_vocals.wav"):
+    if os.path.exists(f"separated/htdemucs/{track_name}/vocals.wav") and os.path.exists(
+            f"separated/htdemucs/{track_name}/no_vocals.wav"):
         print("Found pre-separated track, skipping separation.")
         return track_name
     # Separate the track with demucs
@@ -274,9 +286,10 @@ def separate_track(source_audio_path):
     demucs.separate.main(["--two-stems", "vocals", source_audio_path])
     return track_name
 
+
 def join_track(track_name, model_name):
     # Load the audio files
-    vocal = AudioSegment.from_wav(f"python/inference/RVCv2/audio-outputs/{track_name}_{model_name}_vocals.wav")
+    vocal = AudioSegment.from_wav(f"{current_dir}/audio-outputs/{track_name}_{model_name}_vocals.wav")
     instrumental = AudioSegment.from_wav(f"separated/htdemucs/{track_name}/no_vocals.wav")
 
     # Combine the audio files
@@ -288,24 +301,25 @@ def join_track(track_name, model_name):
 import os
 from scipy.io import wavfile
 
+
 class InferenceManager:
     def __init__(
-        self,
-        model_name,
-        models_path,
-        weights_path,
-        source_audio_path,
-        output_filename='MyTest.wav',
-        feature_index_filepath='logs/mi-test/added_IVF3042_Flat_nprobe_1.index',
-        speaker_id=0,
-        transposition=0,
-        f0_method='harvest',
-        crepe_hop_length=160,
-        harvest_median_filter_radius=3,
-        post_resample_rate=0,
-        mix_volume_envelope=1,
-        feature_index_ratio=0.78,
-        voiceless_consonant_protection=0.33,
+            self,
+            model_name,
+            models_path,
+            weights_path,
+            source_audio_path,
+            output_filename='MyTest.wav',
+            feature_index_filepath='logs/mi-test/added_IVF3042_Flat_nprobe_1.index',
+            speaker_id=0,
+            transposition=0,
+            f0_method='harvest',
+            crepe_hop_length=160,
+            harvest_median_filter_radius=3,
+            post_resample_rate=0,
+            mix_volume_envelope=1,
+            feature_index_ratio=0.78,
+            voiceless_consonant_protection=0.33,
     ):
         self.model_name = model_name
         self.models_path = models_path
@@ -361,23 +375,29 @@ class InferenceManager:
             self.mix_volume_envelope,
             self.voiceless_consonant_protection,
             self.crepe_hop_length,
-            self.weights_path,        
+            self.weights_path,
         )
 
     def write_files(self):
         if "Success." in self.conversion_data[0]:
-            print("RVCv2: Inference succeeded. Writing to %s/%s..." % ('python/inference/RVCv2/audio-outputs', f"{self.track_name}_{self.model_name}_vocals.wav"))
-            wavfile.write('%s/%s' % ('python/inference/RVCv2/audio-outputs', f"{self.track_name}_{self.model_name}_vocals.wav"), self.conversion_data[1][0], self.conversion_data[1][1])
-            print("RVCv2: Finished! Saved output to %s/%s" % ('python/inference/RVCv2/audio-outputs', f"{self.track_name}_{self.model_name}_vocals.wav"))
+            print(
+                f"RVCv2: Inference succeeded. Writing to {f'{current_dir}/audio-outputs'}/{f'{self.track_name}_{self.model_name}_vocals.wav'}...")
+            wavfile.write(
+                f'{f"{current_dir}/audio-outputs"}/{f"{self.track_name}_{self.model_name}_vocals.wav"}',
+                self.conversion_data[1][0], self.conversion_data[1][1])
+            print(
+                f"RVCv2: Finished! Saved output to {f'{current_dir}/audio-outputs'}/{f'{self.track_name}_{self.model_name}_vocals.wav'}")
             print("---------------------------------")
             print("Rejoing the track...")
             self.joined_track = join_track(self.track_name, self.model_name)
             print("Track rejoined.")
             print("Writing completed file...")
-            self.joined_track.export(f"python/inference/RVCv2/audio-outputs/{self.track_name}_{self.model_name}.wav", format='wav')
-            print("Track successfully written to: " + f"python/inference/RVCv2/audio-outputs/{self.track_name}_{self.model_name}.wav")
+            self.joined_track.export(f"{current_dir}/audio-outputs/{self.track_name}_{self.model_name}.wav",
+                                     format='wav')
+            print(
+                "Track successfully written to: " + f"{current_dir}/audio-outputs/{self.track_name}_{self.model_name}.wav")
             print("Cleaning up vocal track...")
-            os.remove(f"python/inference/RVCv2/audio-outputs/{self.track_name}_{self.model_name}_vocals.wav")
+            os.remove(f"{current_dir}/audio-outputs/{self.track_name}_{self.model_name}_vocals.wav")
             print("---------------------------------")
             print("Inference complete.")
         else:
@@ -386,7 +406,7 @@ class InferenceManager:
 
     def check_status(self):
         return self.status
-    
+
     def infer(self):
         self.status = 'Parsing model arguments...'
         self.find_model()
@@ -401,7 +421,6 @@ class InferenceManager:
 
     def run(self):
         threading.Thread(target=self.infer).start()
-
 
 
 def main():
@@ -435,21 +454,23 @@ def main():
         args.post_resample_rate,
         args.mix_volume_envelope,
         args.voiceless_consonant_protection,
-        args.crepe_hop_length,        
+        args.crepe_hop_length,
     )
     if "Success." in conversion_data[0]:
-        print("RVCv2: Inference succeeded. Writing to %s/%s..." % ('RVCv2/audio-outputs', f"{track_name}_{args.model_name}_vocals.wav"))
-        wavfile.write('%s/%s' % ('RVCv2/audio-outputs', f"{track_name}_{args.model_name}_vocals.wav"), conversion_data[1][0], conversion_data[1][1])
-        print("RVCv2: Finished! Saved output to %s/%s" % ('RVCv2/audio-outputs', f"{track_name}_{args.model_name}_vocals.wav"))
+        print("RVCv2: Inference succeeded. Writing to %s/%s..." % (
+            f"{current_dir}/audio-outputs", f"{track_name}_{args.model_name}_vocals.wav"))
+        wavfile.write(f'{f"{current_dir}/audio-outputs"}/{f"{track_name}_{args.model_name}_vocals.wav"}', conversion_data[1][0], conversion_data[1][1])
+        print("RVCv2: Finished! Saved output to %s/%s" % (
+            f"{current_dir}/audio-outputs", f"{track_name}_{args.model_name}_vocals.wav"))
         print("---------------------------------")
         print("Rejoing the track...")
         joined_track = join_track(track_name, args.model_name)
         print("Track rejoined.")
         print("Writing completed file...")
-        joined_track.export(f"RVCv2/audio-outputs/{track_name}_{args.model_name}.wav", format='wav')
-        print("Track successfully written to: " + f"RVCv2/audio-outputs/{track_name}_{args.model_name}.wav")
+        joined_track.export(f"{current_dir}/audio-outputs/{track_name}_{args.model_name}.wav", format='wav')
+        print("Track successfully written to: " + f"{current_dir}/audio-outputs/{track_name}_{args.model_name}.wav")
         print("Cleaning up vocal track...")
-        os.remove(f"RVCv2/audio-outputs/{track_name}_{args.model_name}_vocals.wav")
+        os.remove(f"{current_dir}/audio-outputs/{track_name}_{args.model_name}_vocals.wav")
         print("---------------------------------")
         print("Inference complete.")
     else:
