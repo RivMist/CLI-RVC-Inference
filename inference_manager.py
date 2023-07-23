@@ -1,6 +1,8 @@
 import os
+import re
 import argparse
 import demucs.separate
+import yt_dlp
 import traceback
 import torch
 import numpy as np
@@ -304,28 +306,28 @@ from scipy.io import wavfile
 
 class InferenceManager:
     def __init__(
-            self,
-            model_name,
-            models_path,
-            weights_path,
-            source_audio_path,
-            output_filename='MyTest.wav',
-            feature_index_filepath='logs/mi-test/added_IVF3042_Flat_nprobe_1.index',
-            speaker_id=0,
-            transposition=0,
-            f0_method='harvest',
-            crepe_hop_length=160,
-            harvest_median_filter_radius=3,
-            post_resample_rate=0,
-            mix_volume_envelope=1,
-            feature_index_ratio=0.78,
-            voiceless_consonant_protection=0.33,
+        self,
+        model_name,
+        models_path,
+        weights_path,
+        source_audio_path,
+        output_directory='python/inference/RVCv2/audio-outputs',
+        feature_index_filepath='logs/mi-test/added_IVF3042_Flat_nprobe_1.index',
+        speaker_id=0,
+        transposition=0,
+        f0_method='harvest',
+        crepe_hop_length=160,
+        harvest_median_filter_radius=3,
+        post_resample_rate=0,
+        mix_volume_envelope=1,
+        feature_index_ratio=0.78,
+        voiceless_consonant_protection=0.33,
     ):
         self.model_name = model_name
         self.models_path = models_path
         self.weights_path = weights_path
         self.source_audio_path = source_audio_path
-        self.output_filename = output_filename
+        self.output_directory = output_directory
         self.feature_index_filepath = feature_index_filepath
         self.speaker_id = speaker_id
         self.transposition = transposition
@@ -338,6 +340,7 @@ class InferenceManager:
         self.voiceless_consonant_protection = voiceless_consonant_protection
 
         self.status = 'Beginning inference...'
+        self.output_filepath = None
         self.finished = threading.Event()
 
     def find_model(self):
@@ -392,10 +395,9 @@ class InferenceManager:
             self.joined_track = join_track(self.track_name, self.model_name)
             print("Track rejoined.")
             print("Writing completed file...")
-            self.joined_track.export(f"{current_dir}/audio-outputs/{self.track_name}_{self.model_name}.wav",
-                                     format='wav')
-            print(
-                "Track successfully written to: " + f"{current_dir}/audio-outputs/{self.track_name}_{self.model_name}.wav")
+            self.joined_track.export(f"{self.output_directory}/{self.track_name}_{self.model_name}.wav", format='wav')
+            print("Track successfully written to: " + f"{self.output_directory}/{self.track_name}_{self.model_name}.wav")
+            self.output_filepath = f"{self.output_directory}/{self.track_name}_{self.model_name}.wav"
             print("Cleaning up vocal track...")
             os.remove(f"{current_dir}/audio-outputs/{self.track_name}_{self.model_name}_vocals.wav")
             print("---------------------------------")
@@ -403,13 +405,55 @@ class InferenceManager:
         else:
             print("RVCv2: Inference failed. Here's the traceback: ")
             print(self.conversion_data[0])
+    
+
+    def check_and_download_youtube_audio(self, url):
+        # Check if the url is a valid YouTube video link
+        youtube_regex = (
+            r'(https?://)?(www\.)?'
+            '(youtube|youtu|youtube-nocookie)\.(com|be)/'
+            '(watch\?v=|embed/|v/|.+\?v=)?([^&=%\?]{11})')
+
+        youtube_regex_match = re.match(youtube_regex, url)
+        if not youtube_regex_match:
+            return False, None
+
+        # Get video id from url
+        video_id = youtube_regex_match.group(6)
+
+        # Check if file already exists
+        output_path = f'python/inference/RVCv2/audio-outputs/{video_id}.mp3'
+        if os.path.exists(output_path):
+            return True, output_path
+
+        # Define the options for youtube_dl
+        ydl_opts = {
+            'format': 'bestaudio/best',
+            'outtmpl': f'python/inference/RVCv2/audio-outputs/{video_id}',
+            'postprocessors': [{
+                'key': 'FFmpegExtractAudio',
+                'preferredcodec': 'mp3',
+                'preferredquality': '192',
+            }],
+        }
+
+        # Use youtube_dl to download the youtube video as an mp3
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            self.status = 'Downloading audio from YouTube...'
+            ydl.download([url])
+            return True, output_path
+
 
     def check_status(self):
-        return self.status
+        return (self.status, self.output_filepath)
+    
 
     def infer(self):
         self.status = 'Parsing model arguments...'
         self.find_model()
+        is_yt_video, yt_audio_path = self.check_and_download_youtube_audio(self.source_audio_path)
+        if is_yt_video:
+            self.source_audio_path = yt_audio_path
         self.status = 'Separating track...'
         self.separate_track()
         self.status = "Performing inference..."
