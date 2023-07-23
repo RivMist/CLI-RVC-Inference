@@ -1,17 +1,17 @@
-import argparse
 import torch
 from multiprocessing import cpu_count
-
+import os
 
 def config_file_change_fp32():
+    current_dir = os.path.dirname(os.path.abspath(__file__))
     for config_file in ["32k.json", "40k.json", "48k.json"]:
-        with open(f"python/inference/RVCv2/configs/{config_file}", "r") as f:
+        with open(f"{current_dir}/configs/{config_file}", "r") as f:
             strr = f.read().replace("true", "false")
-        with open(f"python/inference/RVCv2/configs/{config_file}", "w") as f:
+        with open(f"{current_dir}/configs/{config_file}", "w") as f:
             f.write(strr)
-    with open("python/inference/RVCv2/trainset_preprocess_pipeline_print.py", "r") as f:
+    with open(f"{current_dir}/trainset_preprocess_pipeline_print.py", "r") as f:
         strr = f.read().replace("3.7", "3.0")
-    with open("python/inference/RVCv2/trainset_preprocess_pipeline_print.py", "w") as f:
+    with open(f"{current_dir}/trainset_preprocess_pipeline_print.py", "w") as f:
         f.write(strr)
 
 
