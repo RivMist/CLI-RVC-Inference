@@ -295,7 +295,7 @@ class InferenceManager:
         models_path,
         weights_path,
         source_audio_path,
-        output_filename='MyTest.wav',
+        output_directory='python/inference/RVCv2/audio-outputs',
         feature_index_filepath='logs/mi-test/added_IVF3042_Flat_nprobe_1.index',
         speaker_id=0,
         transposition=0,
@@ -311,7 +311,7 @@ class InferenceManager:
         self.models_path = models_path
         self.weights_path = weights_path
         self.source_audio_path = source_audio_path
-        self.output_filename = output_filename
+        self.output_directory = output_directory
         self.feature_index_filepath = feature_index_filepath
         self.speaker_id = speaker_id
         self.transposition = transposition
@@ -324,6 +324,7 @@ class InferenceManager:
         self.voiceless_consonant_protection = voiceless_consonant_protection
 
         self.status = 'Beginning inference...'
+        self.output_filepath = None
         self.finished = threading.Event()
 
     def find_model(self):
@@ -374,8 +375,9 @@ class InferenceManager:
             self.joined_track = join_track(self.track_name, self.model_name)
             print("Track rejoined.")
             print("Writing completed file...")
-            self.joined_track.export(f"python/inference/RVCv2/audio-outputs/{self.track_name}_{self.model_name}.wav", format='wav')
-            print("Track successfully written to: " + f"python/inference/RVCv2/audio-outputs/{self.track_name}_{self.model_name}.wav")
+            self.joined_track.export(f"{self.output_directory}/{self.track_name}_{self.model_name}.wav", format='wav')
+            print("Track successfully written to: " + f"{self.output_directory}/{self.track_name}_{self.model_name}.wav")
+            self.output_filepath = f"{self.output_directory}/{self.track_name}_{self.model_name}.wav"
             print("Cleaning up vocal track...")
             os.remove(f"python/inference/RVCv2/audio-outputs/{self.track_name}_{self.model_name}_vocals.wav")
             print("---------------------------------")
@@ -385,7 +387,7 @@ class InferenceManager:
             print(self.conversion_data[0])
 
     def check_status(self):
-        return self.status
+        return (self.status, self.output_filepath)
     
     def infer(self):
         self.status = 'Parsing model arguments...'
