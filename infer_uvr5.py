@@ -1,17 +1,16 @@
-import os, sys, torch, warnings, pdb
+import os
+import sys
+import torch
+import warnings
 
 now_dir = os.getcwd()
 sys.path.append(now_dir)
-from json import load as ll
 
 warnings.filterwarnings("ignore")
 import librosa
-import importlib
 import numpy as np
-import hashlib, math
-from tqdm import tqdm
 from uvr5_pack.lib_v5 import spec_utils
-from uvr5_pack.utils import _get_name_params, inference
+from uvr5_pack.utils import inference
 from uvr5_pack.lib_v5.model_param_init import ModelParameters
 import soundfile as sf
 from uvr5_pack.lib_v5.nets_new import CascadedNet

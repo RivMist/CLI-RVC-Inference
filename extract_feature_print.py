@@ -1,4 +1,6 @@
-import os, sys, traceback
+import os
+import sys
+import traceback
 
 # device=sys.argv[1]
 n_part = int(sys.argv[2])

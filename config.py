@@ -1,6 +1,8 @@
-import torch
-from multiprocessing import cpu_count
 import os
+from multiprocessing import cpu_count
+
+import torch
+
 
 def config_file_change_fp32():
     current_dir = os.path.dirname(os.path.abspath(__file__))

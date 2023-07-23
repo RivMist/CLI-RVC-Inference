@@ -1,23 +1,25 @@
+import argparse
 import os
 import re
-import argparse
-import demucs.separate
-import yt_dlp
+import threading
 import traceback
-import torch
+
+import demucs.separate
 import numpy as np
+import torch
+import yt_dlp
+from fairseq import checkpoint_utils
 from pydub import AudioSegment
-from .my_utils import load_audio
+
+from .config import Config
 from .infer_pack.models import (
     SynthesizerTrnMs256NSFsid,
     SynthesizerTrnMs256NSFsid_nono,
     SynthesizerTrnMs768NSFsid,
     SynthesizerTrnMs768NSFsid_nono,
 )
-from fairseq import checkpoint_utils
-from .config import Config
+from .my_utils import load_audio
 from .vc_infer_pipeline import VC
-import threading
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
 config = Config()

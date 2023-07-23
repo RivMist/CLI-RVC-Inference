@@ -1,4 +1,6 @@
-import os, traceback
+import os
+import traceback
+
 import numpy as np
 import torch
 import torch.utils.data

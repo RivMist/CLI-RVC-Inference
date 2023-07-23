@@ -1,7 +1,6 @@
 import torch
-import numpy as np
-from torch import nn
 import torch.nn.functional as F
+from torch import nn
 
 from uvr5_pack.lib_v5 import layers_537238KB as layers
 
