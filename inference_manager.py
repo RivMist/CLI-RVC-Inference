@@ -1,6 +1,8 @@
 import os
+import re
 import argparse
 import demucs.separate
+import yt_dlp
 import traceback
 import torch
 import numpy as np
@@ -385,6 +387,44 @@ class InferenceManager:
         else:
             print("RVCv2: Inference failed. Here's the traceback: ")
             print(self.conversion_data[0])
+    
+
+    def check_and_download_youtube_audio(self, url):
+        # Check if the url is a valid YouTube video link
+        youtube_regex = (
+            r'(https?://)?(www\.)?'
+            '(youtube|youtu|youtube-nocookie)\.(com|be)/'
+            '(watch\?v=|embed/|v/|.+\?v=)?([^&=%\?]{11})')
+
+        youtube_regex_match = re.match(youtube_regex, url)
+        if not youtube_regex_match:
+            return False, None
+
+        # Get video id from url
+        video_id = youtube_regex_match.group(6)
+
+        # Check if file already exists
+        output_path = f'python/inference/RVCv2/audio-outputs/{video_id}.mp3'
+        if os.path.exists(output_path):
+            return True, output_path
+
+        # Define the options for youtube_dl
+        ydl_opts = {
+            'format': 'bestaudio/best',
+            'outtmpl': f'python/inference/RVCv2/audio-outputs/{video_id}',
+            'postprocessors': [{
+                'key': 'FFmpegExtractAudio',
+                'preferredcodec': 'mp3',
+                'preferredquality': '192',
+            }],
+        }
+
+        # Use youtube_dl to download the youtube video as an mp3
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            self.status = 'Downloading audio from YouTube...'
+            ydl.download([url])
+            return True, output_path
+
 
     def check_status(self):
         return (self.status, self.output_filepath)
@@ -392,6 +432,9 @@ class InferenceManager:
     def infer(self):
         self.status = 'Parsing model arguments...'
         self.find_model()
+        is_yt_video, yt_audio_path = self.check_and_download_youtube_audio(self.source_audio_path)
+        if is_yt_video:
+            self.source_audio_path = yt_audio_path
         self.status = 'Separating track...'
         self.separate_track()
         self.status = "Performing inference..."
