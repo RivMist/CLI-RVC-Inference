@@ -276,7 +276,7 @@ def separate_track(source_audio_path):
 
 def join_track(track_name, model_name):
     # Load the audio files
-    vocal = AudioSegment.from_wav(f"inference/RVCv2/audio-outputs/{track_name}_{model_name}_vocals.wav")
+    vocal = AudioSegment.from_wav(f"python/inference/RVCv2/audio-outputs/{track_name}_{model_name}_vocals.wav")
     instrumental = AudioSegment.from_wav(f"separated/htdemucs/{track_name}/no_vocals.wav")
 
     # Combine the audio files
@@ -374,10 +374,10 @@ class InferenceManager:
             self.joined_track = join_track(self.track_name, self.model_name)
             print("Track rejoined.")
             print("Writing completed file...")
-            self.joined_track.export(f"inference/RVCv2/audio-outputs/{self.track_name}_{self.model_name}.wav", format='wav')
-            print("Track successfully written to: " + f"inference/RVCv2/audio-outputs/{self.track_name}_{self.model_name}.wav")
+            self.joined_track.export(f"python/inference/RVCv2/audio-outputs/{self.track_name}_{self.model_name}.wav", format='wav')
+            print("Track successfully written to: " + f"python/inference/RVCv2/audio-outputs/{self.track_name}_{self.model_name}.wav")
             print("Cleaning up vocal track...")
-            os.remove(f"inference/RVCv2/audio-outputs/{self.track_name}_{self.model_name}_vocals.wav")
+            os.remove(f"python/inference/RVCv2/audio-outputs/{self.track_name}_{self.model_name}_vocals.wav")
             print("---------------------------------")
             print("Inference complete.")
         else:

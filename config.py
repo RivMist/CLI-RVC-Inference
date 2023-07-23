@@ -5,13 +5,13 @@ from multiprocessing import cpu_count
 
 def config_file_change_fp32():
     for config_file in ["32k.json", "40k.json", "48k.json"]:
-        with open(f"inference/RVCv2/configs/{config_file}", "r") as f:
+        with open(f"python/inference/RVCv2/configs/{config_file}", "r") as f:
             strr = f.read().replace("true", "false")
-        with open(f"inference/RVCv2/configs/{config_file}", "w") as f:
+        with open(f"python/inference/RVCv2/configs/{config_file}", "w") as f:
             f.write(strr)
-    with open("inference/RVCv2/trainset_preprocess_pipeline_print.py", "r") as f:
+    with open("python/inference/RVCv2/trainset_preprocess_pipeline_print.py", "r") as f:
         strr = f.read().replace("3.7", "3.0")
-    with open("inference/RVCv2/trainset_preprocess_pipeline_print.py", "w") as f:
+    with open("python/inference/RVCv2/trainset_preprocess_pipeline_print.py", "w") as f:
         f.write(strr)
 
 
@@ -83,7 +83,7 @@ class Config:
                 + 0.4
             )
             if self.gpu_mem <= 4:
-                with open("inference/RVCv2/trainset_preprocess_pipeline_print.py", "r") as f:
+                with open("python/inference/RVCv2/trainset_preprocess_pipeline_print.py", "r") as f:
                     strr = f.read().replace("3.7", "3.0")
                 with open("inferece/RVCv2/trainset_preprocess_pipeline_print.py", "w") as f:
                     f.write(strr)
