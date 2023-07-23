@@ -18,6 +18,7 @@ from vc_infer_pipeline import VC
 import scipy.io.wavfile as wavfile
 
 config = Config()
+current_dir = os.path.dirname(os.path.abspath(__file__))
 
 def parse_args():
     parser = argparse.ArgumentParser()
@@ -45,7 +46,7 @@ hubert_model = None
 def load_hubert():
     global hubert_model
     models, _, _ = checkpoint_utils.load_model_ensemble_and_task(
-        ["RVCv2/hubert_base.pt"],
+        [f"{current_dir}/hubert_base.pt"],
         suffix="",
     )
     hubert_model = models[0]
@@ -57,9 +58,9 @@ def load_hubert():
     hubert_model.eval()
 
 
-weight_root = "RVCv2/weights"
-weight_uvr5_root = "RVCv2/uvr5_weights"
-index_root = "RVCv2/logs"
+weight_root = f"{current_dir}/weights"
+weight_uvr5_root = f"{current_dir}/uvr5_weights"
+index_root = f"{current_dir}/logs"
 names = []
 for name in os.listdir(weight_root):
     if name.endswith(".pth"):
@@ -292,7 +293,7 @@ def separate_track(source_audio_path):
 
 def join_track(track_name, model_name):
     # Load the audio files
-    vocal = AudioSegment.from_wav(f"RVCv2/audio-outputs/{track_name}_{model_name}_vocals.wav")
+    vocal = AudioSegment.from_wav(f"{current_dir}/audio-outputs/{track_name}_{model_name}_vocals.wav")
     instrumental = AudioSegment.from_wav(f"separated/htdemucs/{track_name}/no_vocals.wav")
 
     # Combine the audio files
@@ -335,18 +336,18 @@ def main():
         args.crepe_hop_length,        
     )
     if "Success." in conversion_data[0]:
-        print("RVCv2: Inference succeeded. Writing to %s/%s..." % ('RVCv2/audio-outputs', f"{track_name}_{args.model_name}_vocals.wav"))
-        wavfile.write('%s/%s' % ('RVCv2/audio-outputs', f"{track_name}_{args.model_name}_vocals.wav"), conversion_data[1][0], conversion_data[1][1])
-        print("RVCv2: Finished! Saved output to %s/%s" % ('RVCv2/audio-outputs', f"{track_name}_{args.model_name}_vocals.wav"))
+        print("RVCv2: Inference succeeded. Writing to %s/%s..." % (f"{current_dir}/audio-outputs", f"{track_name}_{args.model_name}_vocals.wav"))
+        wavfile.write('%s/%s' % (f"{current_dir}/audio-outputs", f"{track_name}_{args.model_name}_vocals.wav"), conversion_data[1][0], conversion_data[1][1])
+        print("RVCv2: Finished! Saved output to %s/%s" % (f"{current_dir}/audio-outputs", f"{track_name}_{args.model_name}_vocals.wav"))
         print("---------------------------------")
         print("Rejoing the track...")
         joined_track = join_track(track_name, args.model_name)
         print("Track rejoined.")
         print("Writing completed file...")
-        joined_track.export(f"RVCv2/audio-outputs/{track_name}_{args.model_name}.wav", format='wav')
-        print("Track successfully written to: " + f"RVCv2/audio-outputs/{track_name}_{args.model_name}.wav")
+        joined_track.export(f"{current_dir}/audio-outputs/{track_name}_{args.model_name}.wav", format='wav')
+        print("Track successfully written to: " + f"{current_dir}/audio-outputs/{track_name}_{args.model_name}.wav")
         print("Cleaning up vocal track...")
-        os.remove(f"RVCv2/audio-outputs/{track_name}_{args.model_name}_vocals.wav")
+        os.remove(f"{current_dir}/audio-outputs/{track_name}_{args.model_name}_vocals.wav")
         print("---------------------------------")
         print("Inference complete.")
     else:
