@@ -366,9 +366,9 @@ class InferenceManager:
 
     def write_files(self):
         if "Success." in self.conversion_data[0]:
-            print("RVCv2: Inference succeeded. Writing to %s/%s..." % ('inference/RVCv2/audio-outputs', f"{self.track_name}_{self.model_name}_vocals.wav"))
-            wavfile.write('%s/%s' % ('inference/RVCv2/audio-outputs', f"{self.track_name}_{self.model_name}_vocals.wav"), self.conversion_data[1][0], self.conversion_data[1][1])
-            print("RVCv2: Finished! Saved output to %s/%s" % ('inference/RVCv2/audio-outputs', f"{self.track_name}_{self.model_name}_vocals.wav"))
+            print("RVCv2: Inference succeeded. Writing to %s/%s..." % ('python/inference/RVCv2/audio-outputs', f"{self.track_name}_{self.model_name}_vocals.wav"))
+            wavfile.write('%s/%s' % ('python/inference/RVCv2/audio-outputs', f"{self.track_name}_{self.model_name}_vocals.wav"), self.conversion_data[1][0], self.conversion_data[1][1])
+            print("RVCv2: Finished! Saved output to %s/%s" % ('python/inference/RVCv2/audio-outputs', f"{self.track_name}_{self.model_name}_vocals.wav"))
             print("---------------------------------")
             print("Rejoing the track...")
             self.joined_track = join_track(self.track_name, self.model_name)
