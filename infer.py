@@ -2,10 +2,10 @@ import os
 import argparse
 import demucs.separate
 import traceback
+import ffmpeg
 import torch
 import numpy as np
 from pydub import AudioSegment
-from my_utils import load_audio
 from infer_pack.models import (
     SynthesizerTrnMs256NSFsid,
     SynthesizerTrnMs256NSFsid_nono,
@@ -19,6 +19,24 @@ import scipy.io.wavfile as wavfile
 
 config = Config()
 current_dir = os.path.dirname(os.path.abspath(__file__))
+
+def load_audio(file, sr):
+    try:
+        # https://github.com/openai/whisper/blob/main/whisper/audio.py#L26
+        # This launches a subprocess to decode audio while down-mixing and resampling as necessary.
+        # Requires the ffmpeg CLI and `ffmpeg-python` package to be installed.
+        file = (
+            file.strip(" ").strip('"').strip("\n").strip('"').strip(" ")
+        )
+        out, _ = (
+            ffmpeg.input(file, threads=0)
+            .output("-", format="f32le", acodec="pcm_f32le", ac=1, ar=sr)
+            .run(cmd=["ffmpeg", "-nostdin"], capture_stdout=True, capture_stderr=True)
+        )
+    except Exception as e:
+        raise RuntimeError(f"Failed to load audio: {e}")
+
+    return np.frombuffer(out, np.float32).flatten()
 
 def parse_args():
     parser = argparse.ArgumentParser()

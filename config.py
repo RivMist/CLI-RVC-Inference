@@ -2,6 +2,7 @@ import torch
 from multiprocessing import cpu_count
 import os
 
+
 def config_file_change_fp32():
     current_dir = os.path.dirname(os.path.abspath(__file__))
     for config_file in ["32k.json", "40k.json", "48k.json"]:
@@ -83,15 +84,20 @@ class Config:
                 + 0.4
             )
             if self.gpu_mem <= 4:
-                with open("python/inference/RVCv2/trainset_preprocess_pipeline_print.py", "r") as f:
+                with open(
+                    "python/inference/RVCv2/trainset_preprocess_pipeline_print.py", "r"
+                ) as f:
                     strr = f.read().replace("3.7", "3.0")
-                with open("inferece/RVCv2/trainset_preprocess_pipeline_print.py", "w") as f:
+                with open(
+                    "inferece/RVCv2/trainset_preprocess_pipeline_print.py", "w"
+                ) as f:
                     f.write(strr)
         elif torch.backends.mps.is_available():
-            print("没有发现支持的N卡, 使用MPS进行推理")
+            print("No supported Nvidia card was found, use MPS for inference.")
             self.device = "mps"
             self.is_half = False
-            config_file_change_fp32()
+            # TODO: Re-add support for CUDA devices
+            # config_file_change_fp32()
         else:
             print("没有发现支持的N卡, 使用CPU进行推理")
             self.device = "cpu"

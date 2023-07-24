@@ -4,10 +4,10 @@ import argparse
 import demucs.separate
 import yt_dlp
 import traceback
+import ffmpeg
 import torch
 import numpy as np
 from pydub import AudioSegment
-from .my_utils import load_audio
 from .infer_pack.models import (
     SynthesizerTrnMs256NSFsid,
     SynthesizerTrnMs256NSFsid_nono,
@@ -20,33 +20,115 @@ from .vc_infer_pipeline import VC
 import threading
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
+
+
+class Config:
+    def __init__(self):
+        self.device = "mps"
+        self.is_half = False
+        self.n_cpu = 0
+        self.gpu_name = None
+        self.gpu_mem = None
+        self.python_cmd = "python"
+        self.listen_port = 7865
+        self.iscolab = False
+        self.noparallel = False
+        self.noautoopen = True
+        self.x_pad = 1
+        self.x_query = 6
+        self.x_center = 38
+        self.x_max = 41
+
+
 config = Config()
+
+def load_audio(file, sr):
+    try:
+        # https://github.com/openai/whisper/blob/main/whisper/audio.py#L26
+        # This launches a subprocess to decode audio while down-mixing and resampling as necessary.
+        # Requires the ffmpeg CLI and `ffmpeg-python` package to be installed.
+        file = (
+            file.strip(" ").strip('"').strip("\n").strip('"').strip(" ")
+        )
+        out, _ = (
+            ffmpeg.input(file, threads=0)
+            .output("-", format="f32le", acodec="pcm_f32le", ac=1, ar=sr)
+            .run(cmd=["ffmpeg", "-nostdin"], capture_stdout=True, capture_stderr=True)
+        )
+    except Exception as e:
+        raise RuntimeError(f"Failed to load audio: {e}")
+
+    return np.frombuffer(out, np.float32).flatten()
 
 
 def parse_args():
     parser = argparse.ArgumentParser()
 
-    parser.add_argument('model_name', type=str,
-                        help='Model name. Will recursively search models/<name>/ for .pth and .index files')
-    parser.add_argument('source_audio_path', type=str, help='Source audio path, e.g., myFolder/MySource.wav.')
+    parser.add_argument(
+        "model_name",
+        type=str,
+        help="Model name. Will recursively search models/<name>/ for .pth and .index files",
+    )
+    parser.add_argument(
+        "source_audio_path",
+        type=str,
+        help="Source audio path, e.g., myFolder/MySource.wav.",
+    )
 
-    parser.add_argument('--output_filename', type=str, default='MyTest.wav',
-                        help="Output file name to be placed in './audio-outputs', e.g., MyTest.wav.")
-    parser.add_argument('--feature_index_filepath', type=str, default='logs/mi-test/added_IVF3042_Flat_nprobe_1.index',
-                        help="Feature index file path, e.g., logs/mi-test/added_IVF3042_Flat_nprobe_1.index.")
-    parser.add_argument('--speaker_id', type=int, default=0, help='Speaker ID, e.g., 0.')
-    parser.add_argument('--transposition', type=int, default=0, help='Transposition, e.g., 0.')
-    parser.add_argument('--f0_method', type=str, default='harvest',
-                        help="F0 method, e.g., 'harvest' (pm, harvest, crepe, crepe-tiny, hybrid[x,x,x,x], mangio-crepe, mangio-crepe-tiny).")
-    parser.add_argument('--crepe_hop_length', type=int, default=160, help='Crepe hop length, e.g., 160.')
-    parser.add_argument('--harvest_median_filter_radius', type=int, default=3,
-                        help='Harvest median filter radius (0-7), e.g., 3.')
-    parser.add_argument('--post_resample_rate', type=int, default=0, help='Post resample rate, e.g., 0.')
-    parser.add_argument('--mix_volume_envelope', type=int, default=1, help='Mix volume envelope, e.g., 1.')
-    parser.add_argument('--feature_index_ratio', type=float, default=0.78,
-                        help='Feature index ratio (0-1), e.g., 0.78.')
-    parser.add_argument('--voiceless_consonant_protection', type=float, default=0.33,
-                        help='Voiceless Consonant Protection (Less Artifact). Smaller number = more protection. 0.50 means Do not Use. E.g., 0.33.')
+    parser.add_argument(
+        "--output_filename",
+        type=str,
+        default="MyTest.wav",
+        help="Output file name to be placed in './audio-outputs', e.g., MyTest.wav.",
+    )
+    parser.add_argument(
+        "--feature_index_filepath",
+        type=str,
+        default="logs/mi-test/added_IVF3042_Flat_nprobe_1.index",
+        help="Feature index file path, e.g., logs/mi-test/added_IVF3042_Flat_nprobe_1.index.",
+    )
+    parser.add_argument(
+        "--speaker_id", type=int, default=0, help="Speaker ID, e.g., 0."
+    )
+    parser.add_argument(
+        "--transposition", type=int, default=0, help="Transposition, e.g., 0."
+    )
+    parser.add_argument(
+        "--f0_method",
+        type=str,
+        default="harvest",
+        help="F0 method, e.g., 'harvest' (pm, harvest, crepe, crepe-tiny, hybrid[x,x,x,x], mangio-crepe, mangio-crepe-tiny).",
+    )
+    parser.add_argument(
+        "--crepe_hop_length", type=int, default=160, help="Crepe hop length, e.g., 160."
+    )
+    parser.add_argument(
+        "--harvest_median_filter_radius",
+        type=int,
+        default=3,
+        help="Harvest median filter radius (0-7), e.g., 3.",
+    )
+    parser.add_argument(
+        "--post_resample_rate", type=int, default=0, help="Post resample rate, e.g., 0."
+    )
+    parser.add_argument(
+        "--mix_volume_envelope",
+        type=int,
+        default=1,
+        help="Mix volume envelope, e.g., 1.",
+    )
+    parser.add_argument(
+        "--feature_index_ratio",
+        type=float,
+        default=0.78,
+        help="Feature index ratio (0-1), e.g., 0.78.",
+    )
+    parser.add_argument(
+        "--voiceless_consonant_protection",
+        type=float,
+        default=0.33,
+        help="Voiceless Consonant Protection (Less Artifact). Smaller number = more protection. 0.50 means Do not Use. E.g., 0.33.",
+    )
 
     args = parser.parse_args()
     return args
@@ -180,20 +262,20 @@ def get_vc(sid, to_return_protect0, to_return_protect1):
 
 
 def vc_single(
-        sid,
-        input_audio_path,
-        f0_up_key,
-        f0_file,
-        f0_method,
-        file_index,
-        file_index2,
-        index_rate,
-        filter_radius,
-        resample_sr,
-        rms_mix_rate,
-        protect,
-        crepe_hop_length,
-        weights_path,
+    sid,
+    input_audio_path,
+    f0_up_key,
+    f0_file,
+    f0_method,
+    file_index,
+    file_index2,
+    index_rate,
+    filter_radius,
+    resample_sr,
+    rms_mix_rate,
+    protect,
+    crepe_hop_length,
+    weights_path,
 ):
     global tgt_sr, net_g, vc, hubert_model, version
     if input_audio_path is None:
@@ -280,7 +362,8 @@ def separate_track(source_audio_path):
     track_name = os.path.splitext(track_filename)[0]
     # Check if splits already exist to avoid reprocessing
     if os.path.exists(f"separated/htdemucs/{track_name}/vocals.wav") and os.path.exists(
-            f"separated/htdemucs/{track_name}/no_vocals.wav"):
+        f"separated/htdemucs/{track_name}/no_vocals.wav"
+    ):
         print("Found pre-separated track, skipping separation.")
         return track_name
     # Separate the track with demucs
@@ -291,8 +374,12 @@ def separate_track(source_audio_path):
 
 def join_track(track_name, model_name):
     # Load the audio files
-    vocal = AudioSegment.from_wav(f"{current_dir}/audio-outputs/{track_name}_{model_name}_vocals.wav")
-    instrumental = AudioSegment.from_wav(f"separated/htdemucs/{track_name}/no_vocals.wav")
+    vocal = AudioSegment.from_wav(
+        f"{current_dir}/audio-outputs/{track_name}_{model_name}_vocals.wav"
+    )
+    instrumental = AudioSegment.from_wav(
+        f"separated/htdemucs/{track_name}/no_vocals.wav"
+    )
 
     # Combine the audio files
     combined = vocal.overlay(instrumental)
@@ -311,11 +398,11 @@ class InferenceManager:
         models_path,
         weights_path,
         source_audio_path,
-        output_directory='python/inference/RVCv2/audio-outputs',
-        feature_index_filepath='logs/mi-test/added_IVF3042_Flat_nprobe_1.index',
+        output_directory="python/inference/RVCv2/audio-outputs",
+        feature_index_filepath="logs/mi-test/added_IVF3042_Flat_nprobe_1.index",
         speaker_id=0,
         transposition=0,
-        f0_method='harvest',
+        f0_method="harvest",
         crepe_hop_length=160,
         harvest_median_filter_radius=3,
         post_resample_rate=0,
@@ -339,13 +426,15 @@ class InferenceManager:
         self.feature_index_ratio = feature_index_ratio
         self.voiceless_consonant_protection = voiceless_consonant_protection
 
-        self.status = 'Beginning inference...'
+        self.status = "Beginning inference..."
         self.output_filepath = None
         self.finished = threading.Event()
 
     def find_model(self):
         print("Searching for model...")
-        self.pth_file, self.index_file = find_pth_and_index_files(f"{self.models_path}/{self.model_name}/")
+        self.pth_file, self.index_file = find_pth_and_index_files(
+            f"{self.models_path}/{self.model_name}/"
+        )
         if self.pth_file is None:
             print("No model file found.")
             return
@@ -384,35 +473,49 @@ class InferenceManager:
     def write_files(self):
         if "Success." in self.conversion_data[0]:
             print(
-                f"RVCv2: Inference succeeded. Writing to {f'{current_dir}/audio-outputs'}/{f'{self.track_name}_{self.model_name}_vocals.wav'}...")
+                f"RVCv2: Inference succeeded. Writing to {f'{current_dir}/audio-outputs'}/{f'{self.track_name}_{self.model_name}_vocals.wav'}..."
+            )
             wavfile.write(
                 f'{f"{current_dir}/audio-outputs"}/{f"{self.track_name}_{self.model_name}_vocals.wav"}',
-                self.conversion_data[1][0], self.conversion_data[1][1])
+                self.conversion_data[1][0],
+                self.conversion_data[1][1],
+            )
             print(
-                f"RVCv2: Finished! Saved output to {f'{current_dir}/audio-outputs'}/{f'{self.track_name}_{self.model_name}_vocals.wav'}")
+                f"RVCv2: Finished! Saved output to {f'{current_dir}/audio-outputs'}/{f'{self.track_name}_{self.model_name}_vocals.wav'}"
+            )
             print("---------------------------------")
             print("Rejoing the track...")
             self.joined_track = join_track(self.track_name, self.model_name)
             print("Track rejoined.")
             print("Writing completed file...")
-            self.joined_track.export(f"{self.output_directory}/{self.track_name}_{self.model_name}.wav", format='wav')
-            print("Track successfully written to: " + f"{self.output_directory}/{self.track_name}_{self.model_name}.wav")
-            self.output_filepath = f"{self.output_directory}/{self.track_name}_{self.model_name}.wav"
+            self.joined_track.export(
+                f"{self.output_directory}/{self.track_name}_{self.model_name}.wav",
+                format="wav",
+            )
+            print(
+                "Track successfully written to: "
+                + f"{self.output_directory}/{self.track_name}_{self.model_name}.wav"
+            )
+            self.output_filepath = (
+                f"{self.output_directory}/{self.track_name}_{self.model_name}.wav"
+            )
             print("Cleaning up vocal track...")
-            os.remove(f"{current_dir}/audio-outputs/{self.track_name}_{self.model_name}_vocals.wav")
+            os.remove(
+                f"{current_dir}/audio-outputs/{self.track_name}_{self.model_name}_vocals.wav"
+            )
             print("---------------------------------")
             print("Inference complete.")
         else:
             print("RVCv2: Inference failed. Here's the traceback: ")
             print(self.conversion_data[0])
-    
 
     def check_and_download_youtube_audio(self, url):
         # Check if the url is a valid YouTube video link
         youtube_regex = (
-            r'(https?://)?(www\.)?'
-            '(youtube|youtu|youtube-nocookie)\.(com|be)/'
-            '(watch\?v=|embed/|v/|.+\?v=)?([^&=%\?]{11})')
+            r"(https?://)?(www\.)?"
+            "(youtube|youtu|youtube-nocookie)\.(com|be)/"
+            "(watch\?v=|embed/|v/|.+\?v=)?([^&=%\?]{11})"
+        )
 
         youtube_regex_match = re.match(youtube_regex, url)
         if not youtube_regex_match:
@@ -422,39 +525,41 @@ class InferenceManager:
         video_id = youtube_regex_match.group(6)
 
         # Check if file already exists
-        output_path = f'python/inference/RVCv2/audio-outputs/{video_id}.mp3'
+        output_path = f"python/inference/RVCv2/audio-outputs/{video_id}.mp3"
         if os.path.exists(output_path):
             return True, output_path
 
         # Define the options for youtube_dl
         ydl_opts = {
-            'format': 'bestaudio/best',
-            'outtmpl': f'python/inference/RVCv2/audio-outputs/{video_id}',
-            'postprocessors': [{
-                'key': 'FFmpegExtractAudio',
-                'preferredcodec': 'mp3',
-                'preferredquality': '192',
-            }],
+            "format": "bestaudio/best",
+            "outtmpl": f"python/inference/RVCv2/audio-outputs/{video_id}",
+            "postprocessors": [
+                {
+                    "key": "FFmpegExtractAudio",
+                    "preferredcodec": "mp3",
+                    "preferredquality": "192",
+                }
+            ],
         }
 
         # Use youtube_dl to download the youtube video as an mp3
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            self.status = 'Downloading audio from YouTube...'
+            self.status = "Downloading audio from YouTube..."
             ydl.download([url])
             return True, output_path
 
-
     def check_status(self):
         return (self.status, self.output_filepath)
-    
 
     def infer(self):
-        self.status = 'Parsing model arguments...'
+        self.status = "Parsing model arguments..."
         self.find_model()
-        is_yt_video, yt_audio_path = self.check_and_download_youtube_audio(self.source_audio_path)
+        is_yt_video, yt_audio_path = self.check_and_download_youtube_audio(
+            self.source_audio_path
+        )
         if is_yt_video:
             self.source_audio_path = yt_audio_path
-        self.status = 'Separating track...'
+        self.status = "Separating track..."
         self.separate_track()
         self.status = "Performing inference..."
         self.perform_inference()
@@ -501,20 +606,42 @@ def main():
         args.crepe_hop_length,
     )
     if "Success." in conversion_data[0]:
-        print("RVCv2: Inference succeeded. Writing to %s/%s..." % (
-            f"{current_dir}/audio-outputs", f"{track_name}_{args.model_name}_vocals.wav"))
-        wavfile.write(f'{f"{current_dir}/audio-outputs"}/{f"{track_name}_{args.model_name}_vocals.wav"}', conversion_data[1][0], conversion_data[1][1])
-        print("RVCv2: Finished! Saved output to %s/%s" % (
-            f"{current_dir}/audio-outputs", f"{track_name}_{args.model_name}_vocals.wav"))
+        print(
+            "RVCv2: Inference succeeded. Writing to %s/%s..."
+            % (
+                f"{current_dir}/audio-outputs",
+                f"{track_name}_{args.model_name}_vocals.wav",
+            )
+        )
+        wavfile.write(
+            f'{f"{current_dir}/audio-outputs"}/{f"{track_name}_{args.model_name}_vocals.wav"}',
+            conversion_data[1][0],
+            conversion_data[1][1],
+        )
+        print(
+            "RVCv2: Finished! Saved output to %s/%s"
+            % (
+                f"{current_dir}/audio-outputs",
+                f"{track_name}_{args.model_name}_vocals.wav",
+            )
+        )
         print("---------------------------------")
         print("Rejoing the track...")
         joined_track = join_track(track_name, args.model_name)
         print("Track rejoined.")
         print("Writing completed file...")
-        joined_track.export(f"{current_dir}/audio-outputs/{track_name}_{args.model_name}.wav", format='wav')
-        print("Track successfully written to: " + f"{current_dir}/audio-outputs/{track_name}_{args.model_name}.wav")
+        joined_track.export(
+            f"{current_dir}/audio-outputs/{track_name}_{args.model_name}.wav",
+            format="wav",
+        )
+        print(
+            "Track successfully written to: "
+            + f"{current_dir}/audio-outputs/{track_name}_{args.model_name}.wav"
+        )
         print("Cleaning up vocal track...")
-        os.remove(f"{current_dir}/audio-outputs/{track_name}_{args.model_name}_vocals.wav")
+        os.remove(
+            f"{current_dir}/audio-outputs/{track_name}_{args.model_name}_vocals.wav"
+        )
         print("---------------------------------")
         print("Inference complete.")
     else:
@@ -522,5 +649,5 @@ def main():
         print(conversion_data[0])
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
